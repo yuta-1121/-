@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<title>足し算ゲーム（繰り上がりなし・カウントダウン表示修正）</title>
+<style>
+  :root{ --ink:#e5e7eb; --good:#22c55e; --bad:#ef4444; --primary-btn:#16a34a; --primary-btn-text:#052e16; --secondary-btn:#111827; --secondary-btn-text:#e5e7eb; --gold-start:#ffd700; --gold-end:#ffae00; --gold-text:#1f2937; --bg-dark:#0a0f1c; --card-bg-start:#0f172a; --card-bg-end:#0b1220; --border-color:rgba(255,255,255,.08); --input-bg:#0b1220; --input-border:rgba(255,255,255,.15); --round-display-start:#bfdbfe; --round-display-end:#2563eb; --round-display-text:#1e3a8a; --final-round-start:#7f1d1d; --final-round-end:#b91c1c; --final-round-text:#ffd7d7; }
+  html,body{margin:0;background:var(--bg-dark);color:var(--ink);font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{min-height:100svh;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom)}
+  .card{max-width:860px;margin:0 auto;padding:14px;border:1px solid var(--border-color);border-radius:16px;background:linear-gradient(180deg,var(--card-bg-start),var(--card-bg-end))}
+  header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  h1{font-size:18px;margin:0;color:#c7d2fe}
+  .btn{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 16px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#1f2937;color:#e5e7eb;font-weight:700;cursor:pointer;user-select:none}
+  .btn.primary{background:var(--primary-btn);color:var(--primary-btn-text)}
+  .btn.secondary{background:var(--secondary-btn);color:var(--secondary-btn-text)}
+  .btn.gold{background:linear-gradient(135deg,var(--gold-start),var(--gold-end));color:var(--gold-text);box-shadow:0 6px 16px rgba(255,200,0,.55);font-weight:900}
+  .btn:active{transform:translateY(1px)}
+
+  #roundDisplay{display:inline-block;margin:2px 0 8px;padding:6px 14px;font-weight:900;
+    font-size:clamp(16px,4.5vw,22px);border-radius:999px;background:linear-gradient(90deg,var(--round-display-start),var(--round-display-end)); color:var(--round-display-text);
+    box-shadow:0 4px 10px rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.2);}
+  #roundDisplay.final{color:var(--final-round-text);background:linear-gradient(90deg,var(--final-round-start),var(--final-round-end));
+    text-shadow:0 0 10px #fff,0 0 20px #ff0000; animation:pulse 1.2s infinite alternate;}
+  @keyframes pulse{from{transform:scale(1);opacity:1}to{transform:scale(1.07);opacity:.9}}
+
+  .problem{font-size:clamp(24px,6vw,40px);font-weight:900;margin:8px 0 6px}
+  .answerRow{display:flex;gap:8px;align-items:center}
+  input[type="text"]{
+    flex:0 0 160px;height:48px;border-radius:12px;border:1px solid var(--input-border);
+    background:var(--input-bg);color:#fff;font-size:22px;text-align:center;outline:none
+  }
+  .feedback{min-height:24px;margin-top:6px}
+  .good{color:var(--good);font-weight:800}
+  .bad{color:var(--bad);font-weight:800}
+  .info{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;font-size:14px;opacity:.9}
+  .chip{background:var(--input-bg);border:1px solid rgba(255,255,255,.12);padding:4px 10px;border-radius:999px}
+
+  /* 攻撃UI */
+  #attackSection{display:none;margin-top:12px;border:1px solid var(--border-color);border-radius:12px;padding:12px;background:var(--input-bg)}
+  #bossFace{position:relative;width:100%;max-width:280px;height:170px;margin:0 auto;border-radius:14px;
+    background:var(--input-bg);border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #bossFace.useImg #bossEyes,#bossFace.useImg #bossMouth{display:none}
+  #bossImg{max-width:100%;max-height:100%}
+  #bossFace.shake,#bossImg.shake{animation:shake .3s}
+  @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-8px)}50%{transform:translateX(8px)}75%{transform:translateX(-8px)}100%{transform:translateX(0)}}
+  #bossEyes::before,#bossEyes::after{content:"";position:absolute;top:38%;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 16px rgba(255,255,255,.5)}
+  #bossEyes::before{left:35%} #bossEyes::after{right:35%}
+  #bossMouth{position:absolute;left:50%;top:62%;transform:translateX(-50%);width:80px;height:10px;background:#111;border-radius:50px}
+  #bossFace.defeated{filter:saturate(.9) brightness(.9)}
+  #bossFace.defeated #bossEyes::before,#bossFace.defeated #bossEyes::after{width:42px;height:4px;background:#ef4444;border-radius:2px}
+  .hpWrap{margin-top:8px;text-align:center}
+  .hp{height:10px;background:#111;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,.15)}
+  .hp>i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ef4444,#b91c1c)}
+  .rowBtns{margin-top:8px;display:flex;gap:8px}
+  #attackResult{margin-top:8px;text-align:center}
+
+  /* バナー */
+  #roundBanner{position:fixed;z-index:60;left:50%;top:18vh;transform:translateX(-50%);
+    padding:12px 18px;border-radius:999px;background:linear-gradient(90deg,rgba(34,197,94,.95),rgba(59,130,246,.95));
+    color:#0b1220;font-weight:900;border:1px solid rgba(255,255,255,.25);box-shadow:0 10px 40px rgba(0,0,0,.35);
+    font-size:clamp(16px,4.5vw,22px);opacity:0;display:none}
+  #roundBanner.show{animation:rb-in 0.20s ease forwards}
+  @keyframes rb-in{0%{opacity:0;transform:translate(-50%,-12px) scale(.96)}25%{opacity:1;transform:translate(-50%,0) scale(1.02)}70%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0}}
+
+  /* オーバーレイ */
+  #finalIntroOverlay, #victoryOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw; /* 明示的にビューポート幅に設定 */
+    height: 100vh; /* 明示的にビューポート高に設定 */
+    background: rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    cursor: pointer;
+    margin: 0; /* 余白を確実に除去 */
+    padding: 0; /* パディングを確実に除去 */
+  }
+  #victoryOverlay{z-index:9999}
+  /* ここを修正：画像をビューポート全体に覆いかぶせるようにし、ボーダーなどを削除 */
+  #finalIntroOverlay img,#victoryOverlay img{
+    display: block; /* インライン要素による余白を防ぐ */
+    width: 100%; /* 親要素の幅に合わせる */
+    height: 100%; /* 親要素の高さに合わせる */
+    object-fit: contain; /* 画面全体を覆うように拡大・縮小 (修正点) */
+    border-radius: 0; /* 角丸を削除 */
+    box-shadow: none; /* シャドウを削除 */
+    margin: 0; /* 余白を確実に除去 */
+    padding: 0; /* パディングを確実に除去 */
+  }    max-width: 100vw;
+    max-height: 100vh;
+
+  #finalIntroOverlay .label{margin-top:14px;font-size:42px;font-weight:900;color:#93c5fd;text-shadow:0 0 10px #fff,0 0 22px #60a5fa}
+  #finalIntroOverlay .count{margin-top:6px;font-size:36px;font-weight:900;color:#eab308;text-shadow:0 0 10px #fff,0 0 22px #eab308}
+  #victoryOverlay .title{margin-top:16px;font-size:48px;font-weight:900;color:var(--gold-start);text-shadow:0 0 12px #fff,0 0 28px var(--gold-end); display: none;} /* テキストを非表示に */
+
+  /* --- Mobile optimizations --- */
+  @media (max-width: 640px) {
+    .card{padding:12px}
+    .btn{height:56px;border-radius:14px;padding:0 18px;font-weight:800}
+    input[type="text"]{height:56px;border-radius:14px;font-size:24px;min-width:44vw}
+    .problem{font-size:clamp(26px,7vw,42px)}
+  }
+  /* Sticky action bar for one-hand operation */
+  #mobileBar{
+    position:fixed;left:0;right:0;bottom:0;z-index:70;
+    display:none; /* shown on small screens when in attack phase or final press */
+    background:rgba(10,15,28,.92);backdrop-filter:saturate(140%) blur(8px);
+    border-top:1px solid rgba(255,255,255,.08);
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+  #mobileBar .row{display:flex;gap:10px}
+  #mobileBar .mbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;
+    height:56px;border-radius:14px;border:1px solid rgba(255,255,255,.12);font-weight:900}
+  #mAttack{background:var(--primary-btn);color:var(--primary-btn-text)}
+  #mRetry{background:var(--secondary-btn);color:var(--secondary-btn-text)}
+  #mVictory{background:linear-gradient(135deg,var(--gold-start),var(--gold-end));color:var(--gold-text);box-shadow:0 6px 16px rgba(255,200,0,.35)}
+
+
+  /* --- Desktop enhancements (keep mobile-first UI) --- */
+  @media (min-width: 641px){
+    .card{max-width: 980px; padding: 18px 20px;}
+    h1{font-size: 20px}
+    .problem{font-size: clamp(28px, 3.2vw, 48px)}
+    .btn{height: 52px; border-radius: 12px; padding: 0 18px}
+    input[type="text"]{height: 52px; font-size: 22px; min-width: 220px}
+  }
+
+  /* Center buttons horizontally */
+  .btn, .mbtn { margin-left:auto; margin-right:auto; display:flex; justify-content:center; }
+  .row { justify-content:center; }
+
+
+  /* 強制中央寄せ for all UI elements */
+  body, .wrap, .card, .row, .hud, #mobileBar .row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .btn, .mbtn {
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  input[type="text"] {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+
+
+/* --- Stats line: always horizontal (PC & Mobile) --- */
+.info {
+  display: flex !important;
+  flex-direction: row !important;     /* 横並び固定 */
+  justify-content: center !important; /* 中央寄せ */
+  align-items: center !important;     /* 縦位置も中央揃え */
+  gap: 10px !important;               /* 項目間の余白 */
+  text-align: center !important;
+}
+
+
+/* === Congrats Rainbow (bright & animated) === */
+
+.congrats-rainbow{
+  position: relative;
+  background: transparent; /* background moved to ::before to avoid seams */
+  color: #111;
+  padding: 8px 16px;
+  border-radius: 14px;
+  box-shadow: 0 0 12px rgba(255,255,255,.6);
+  text-shadow: 0 1px 2px rgba(255,255,255,.7), 0 0 8px rgba(255,255,255,.4);
+  display: inline-block;
+  overflow: hidden; /* keep pseudo-elements clipped to pill */
+
+  z-index: 0;
+}
+
+@keyframes rainbowShift{
+  0%{ background-position: 0% 50%; }
+  100%{ background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce){
+  
+.congrats-rainbow{
+  position: relative;
+  background: transparent; /* background moved to ::before to avoid seams */
+  color: #111;
+  padding: 8px 16px;
+  border-radius: 14px;
+  box-shadow: 0 0 12px rgba(255,255,255,.6);
+  text-shadow: 0 1px 2px rgba(255,255,255,.7), 0 0 8px rgba(255,255,255,.4);
+  display: inline-block;
+  overflow: hidden; /* keep pseudo-elements clipped to pill */
+
+  z-index: 0;
+}
+
+}
+
+/* Ensure rainbow wins against #roundDisplay base/background */
+#roundDisplay
+.congrats-rainbow{
+  position: relative;
+  background: transparent; /* background moved to ::before to avoid seams */
+  color: #111;
+  padding: 8px 16px;
+  border-radius: 14px;
+  box-shadow: 0 0 12px rgba(255,255,255,.6);
+  text-shadow: 0 1px 2px rgba(255,255,255,.7), 0 0 8px rgba(255,255,255,.4);
+  display: inline-block;
+  overflow: hidden; /* keep pseudo-elements clipped to pill */
+
+  z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce){
+  #roundDisplay
+.congrats-rainbow{
+  position: relative;
+  background: transparent; /* background moved to ::before to avoid seams */
+  color: #111;
+  padding: 8px 16px;
+  border-radius: 14px;
+  box-shadow: 0 0 12px rgba(255,255,255,.6);
+  text-shadow: 0 1px 2px rgba(255,255,255,.7), 0 0 8px rgba(255,255,255,.4);
+  display: inline-block;
+  overflow: hidden; /* keep pseudo-elements clipped to pill */
+
+  z-index: 0;
+}
+
+}
+
+#roundDisplay.congrats-rainbow{
+  background: transparent !important;
+
+  z-index: 0;
+}
+@media (prefers-reduced-motion: reduce){
+  #roundDisplay.congrats-rainbow{ /* nothing animated for reduced motion */ 
+  z-index: 0;
+}
+}
+
+/* --- Rainbow via pseudo-elements to avoid seams, plus subtle dithering noise --- */
+
+
+.congrats-rainbow::before{
+  content:"";
+  position:absolute; inset:0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    #ff3d3d, #ff9a3d, #ffea00, #7dff3d, #00f0ff, #6b66ff, #ff3dd1, #ff3d3d);
+  background-size: 300% 100%;
+  animation: rainbowMoveRTL 3s linear infinite alternate, hueSpin 7s linear infinite;
+  will-change: background-position, filter;
+}
+
+
+.congrats-rainbow::after{
+  content:"";
+  position:absolute; inset:0;
+  border-radius: inherit;
+  pointer-events:none;
+  background: repeating-linear-gradient(45deg,
+    rgba(255,255,255,.015) 0 2px,
+    rgba(0,0,0,.015) 2px 4px);
+  mix-blend-mode: overlay;
+
+  z-index: -1;
+}
+
+}
+@media (prefers-reduced-motion: reduce){
+  
+
+.congrats-rainbow::before{
+  content:"";
+  position:absolute; inset:0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    #ff3d3d, #ff9a3d, #ffea00, #7dff3d, #00f0ff, #6b66ff, #ff3dd1, #ff3d3d);
+  background-size: 300% 100%;
+  animation: rainbowMoveRTL 3s linear infinite alternate, hueSpin 7s linear infinite;
+  will-change: background-position, filter;
+}
+
+
+}
+
+
+  100% { background-position: 100% 50%; }
+}
+
+  100% { filter: hue-rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce){
+  
+.congrats-rainbow::before{
+  content:"";
+  position:absolute; inset:0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    #ff3d3d, #ff9a3d, #ffea00, #7dff3d, #00f0ff, #6b66ff, #ff3dd1, #ff3d3d);
+  background-size: 300% 100%;
+  animation: rainbowMoveRTL 3s linear infinite alternate, hueSpin 7s linear infinite;
+  will-change: background-position, filter;
+}
+
+}
+
+
+  100% { background-position:   0% 50%; }
+}
+
+@keyframes rainbowMoveRTL{
+  0%   { background-position: 100% 50%; }
+  100% { background-position:   0% 50%; }
+}
+@keyframes hueSpin{
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce){
+  .congrats-rainbow::before{ animation: rainbowMoveRTL 3s linear infinite alternate, hueSpin 7s linear infinite; }
+}
+
+/* === Hide HP bar and HP numbers only (keep attack count visible) === */
+#bossPanel .hpWrap .hp{ display:none !important; }
+#bossPanel .hpWrap .hpNumbers{ display:none !important; }
+#bossPanel .atkOnly{ display:block !important; text-align:center; }
+
+/* === Hide HP bar and HP numbers only (keep attack count visible) === */
+#bossPanel .hpWrap .hp{ display:none !important; }
+#bossPanel .hpWrap .hpNumbers{ display:none !important; }
+#bossPanel .atkOnly{ display:block !important; text-align:center; }
+
+/* === Final Intro Overlay: center text and fit image === */
+#finalIntroOverlay{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.9);
+  z-index: 9999;
+}
+#finalIntroOverlay img{
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+#finalIntroOverlay .label,
+#finalIntroOverlay .count{
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-weight: 900;
+  text-align: center;
+  text-shadow: 0 0 18px rgba(0,0,0,.9), 0 0 36px rgba(0,0,0,.9), 0 0 56px rgba(0,0,0,.7);
+  pointer-events: none;
+}
+#finalIntroOverlay .label{
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(28px, 8vw, 64px);
+  letter-spacing: 0.08em;
+}
+#finalIntroOverlay .count{
+  top: calc(50% + min(8vw, 64px) + 10px);
+  font-size: clamp(18px, 6vw, 48px);
+  letter-spacing: 0.06em;
+}
+</style>
+
+<style id="final-intro-fixes">
+/* Final Intro: center label & count, fit image fully within viewport */
+#finalIntroOverlay{
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0,0,0,0.9) !important;
+  z-index: 9999 !important;
+}
+#finalIntroOverlay img{
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  object-fit: contain !important;
+  margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important;
+}
+
+/* Center the "最終決戦" label and the countdown */
+#finalIntroOverlay .label,
+#finalIntroOverlay .count{
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  color: #fff !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  text-shadow: 0 0 18px rgba(0,0,0,.9), 0 0 36px rgba(0,0,0,.9), 0 0 56px rgba(0,0,0,.7) !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+}
+#finalIntroOverlay .label{
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  font-size: clamp(28px, 8vw, 64px) !important;
+  letter-spacing: 0.08em !important;
+}
+#finalIntroOverlay .count{
+  top: calc(50% + min(8vw, 64px) + 10px) !important;
+  font-size: clamp(18px, 6vw, 48px) !important;
+  letter-spacing: 0.06em !important;
+}
+
+/* === Dock #roundBanner exactly over #roundDisplay === */
+#roundBanner.docked{
+  /* Size/position set by JS to match/expand over #roundDisplay */
+  padding: 6px 12px;
+  border-radius: 999px;
+  transform: none;
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+#roundBanner.docked.show{ animation: rb-in-docked 0.20s ease forwards; }
+/* Opacity+scale only (no translate) */
+@keyframes rb-in-docked{
+  0%   { opacity: 0; transform: scale(.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* === Victory Overlay: center "撃破" text on the image === */
+#victoryOverlay{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.1);
+  z-index: 9999;
+}
+#victoryOverlay img{
+  display:block;
+  width:100%;
+  height:100%;
+  max-width:100vw;
+  max-height:100vh;
+  object-fit: contain;
+  margin:0; padding:0; border:0; box-shadow:none;
+}
+#victoryOverlay .victoryText{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform: translate(-50%,-50%);
+  color: #fff;
+  font-weight:900;
+  font-size: clamp(28px, 8vw, 64px);
+  letter-spacing:.08em;
+  text-align:center;
+  text-shadow: 0 0 18px rgba(0,0,0,.9), 0 0 36px rgba(0,0,0,.9), 0 0 56px rgba(0,0,0,.7);
+  pointer-events:none;
+}
+
+/* === Victory text themes & animation === */
+#victoryOverlay .victoryText{
+  position:absolute;
+  top:50%; left:50%;
+  transform: translate(-50%,-50%);
+  font-weight: 900;
+  font-size: clamp(32px, 10vw, 88px);
+  letter-spacing:.08em;
+  text-align:center;
+  pointer-events:none;
+  text-shadow: 0 0 18px rgba(0,0,0,.85), 0 0 36px rgba(0,0,0,.8), 0 0 56px rgba(0,0,0,.6);
+}
+/* Gold gradient text */
+#victoryOverlay .victoryText.gold{
+  color: transparent;
+  background: linear-gradient(90deg,#fff7cc,#ffe066,#ffd23f,#ffbf00,#ffd23f,#ffe066,#fff7cc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0 10px rgba(255,215,0,.5)) drop-shadow(0 0 20px rgba(255,215,0,.35));
+  animation: goldShimmer 2.2s linear infinite;
+}
+@keyframes goldShimmer{
+  0%{ background-position: 200% 0; }
+  100%{ background-position: 0 0; }
+}
+/* Red variant */
+#victoryOverlay .victoryText.red{
+  color: #ff2d2d;
+  filter: drop-shadow(0 0 12px rgba(255,45,45,.55));
+}
+
+/* Flashing pulse (applies to both themes) */
+#victoryOverlay .victoryText.flash{
+  animation: flashPulse .8s ease-in-out infinite;
+}
+@keyframes flashPulse{
+  0%,100%{ opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  50%{ opacity: .72; transform: translate(-50%,-50%) scale(1.04); }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  #victoryOverlay .victoryText.gold{ animation: none; }
+  #victoryOverlay .victoryText.flash{ animation: none; }
+}
+
+/* Ensure victory text is fully opaque white */
+#victoryOverlay .victoryText{ color:#fff !important; }
+</style>
+
+
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="problemPanel">
+    <header>
+      <h1>足し算ゲーム</h1>
+      <button id="restartBtn" class="btn secondary">🔁 リスタート</button>
+    </header>
+
+    <div id="roundBanner" aria-live="polite"></div>
+    <div id="nextRoundHint" aria-live="polite" style="margin-bottom:4px;font-size:14px;opacity:.85"></div>
+    <div id="roundDisplay" aria-live="polite">ラウンド 1</div>
+
+    <div class="problem" id="problem">0 + 0 = ?</div>
+
+    <div class="answerRow">
+      <input id="answer" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="答え" />
+      <button id="submitBtn" class="btn primary">答える</button>
+    </div>
+    <div class="feedback" id="feedback" aria-atomic="true"></div>
+    <!-- 最終決戦の秒数カウントダウン表示エリア -->
+    <div id="finalCountdownDisplay" style="margin-top: 8px; font-size: 16px; font-weight: bold; color: #a5b4fc; display: none;" aria-live="polite"></div>
+
+    <div id="attackInlineSlot"></div>
+
+    <div class="info">
+      <span class="chip">正解数: <b id="score">0</b></span>
+      <span class="chip">ラウンド: <b id="round">1</b></span>
+      <span class="chip">連続: <b id="streak">0</b></span>
+    </div>
+
+    <section class="panel final-panel" id="attackSection" aria-live="polite">
+      <div id="bossPanel">
+        <div id="bossFace">
+          <img id="bossImg" alt="BOSS" style="display:none" />
+          <div id="bossEyes"></div>
+          <div id="bossMouth"></div>
+        </div>
+        <div class="hpWrap">
+          <div class="hp" aria-label="HP"><i id="hpBar"></i></div>
+          <div class="hpNumbers" style="margin-top:6px">HP: <b id="hpNow">0</b> / <span id="hpMax">0</span></div>
+        </div>
+        <div class="atkOnly" style="margin-top:6px">攻撃回数: <b id="atkLeft">0</b></div>
+        <div class="rowBtns">
+          <button id="attackBtn" class="btn primary" style="flex:1">攻撃だ！</button>
+          <button id="retryBtn" class="btn secondary" style="flex:1;display:none">もう一度戦う</button>
+          <button id="victoryBtn" class="btn gold" style="flex:1;display:none">押して！</button>
+        </div>
+        <div id="attackResult"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Sticky mobile action bar -->
+<div id="mobileBar" aria-hidden="true">
+  <div class="row">
+    <button id="mAttack" class="mbtn">攻撃だ！</button>
+    <button id="mRetry" class="mbtn" style="display:none">もう一度戦う</button>
+    <button id="mVictory" class="mbtn" style="display:none">押して！</button>
+  </div>
+</div>
+
+<script>
+// ===== 定数群 =====
+const GAME_CONST = {
+  ROUND_COUNT_PER_STAGE: 3,
+  FINAL_ROUND_THRESHOLD: 5,
+  FINAL_QUESTION_COUNT: 5,
+  FINAL_TIMER_SECONDS: 20,
+  // 繰り上がりがない問題のための最大数を定義 (この値までの範囲で繰り上がりなく数字を生成)
+  MAX_NUMBER_NO_CARRY_TWO_DIGIT: 49,
+  AUDIO_MASTER_GAIN: 0.15,
+  BOSS_HP_BAG: [5, 5, 5, 5, 4, 4, 4, 3, 3, 2, 2, 1],
+  ROUND_BANNER_DURATION_MS: 1100,
+  FINAL_INTRO_DURATION_MS: 3000
+};
+
+const GAME_PHASES = {
+  NORMAL: 'normal',
+  FINAL_QUESTION: 'finalQ',
+  ATTACK: 'attack',
+  INTRO_FINAL: 'introFinal',
+  VICTORY: 'victory'
+};
+
+const SHORTCUTS = {
+    BOSS_ATTACK: /^(最終決戦へ|最終決戦まで飛ばして|boos|boss)$/i,
+    ROUND_FIVE_Q_THREE: /^(ラウンド5へ|ラウンド5の3問目|round5-3|r5q3|r53)$/i,
+    ROUND_FIVE_Q_ONE: /^(r51|r５１)$/i
+};
+
+// ===== DOM要素のキャッシュ =====
+const $ = id => document.getElementById(id);
+
+
+function hideRoundBannerNow(){
+  const rb = document.getElementById('roundBanner');
+  if(!rb) return;
+  rb.classList.remove('show','hide','docked');
+  rb.style.display = 'none';
+}
+
+function positionRoundBannerOverDisplay(){
+  const rb = document.getElementById('roundBanner');
+  const rd = document.getElementById('roundDisplay');
+  if(!rb || !rd) return;
+
+  const rect = rd.getBoundingClientRect();
+  rb.style.position = 'fixed';
+  rb.style.transform = 'none';
+  rb.style.whiteSpace = 'nowrap';
+  rb.style.boxSizing = 'border-box';
+  rb.style.padding = '6px 12px';
+  rb.classList.add('docked');
+
+  // Start with same size/pos as #roundDisplay
+  rb.style.left = rect.left + 'px';
+  rb.style.top = rect.top + 'px';
+  rb.style.width = rect.width + 'px';
+  rb.style.height = rect.height + 'px';
+
+  // Measure content size (auto) and expand if needed
+  const prevW = rb.style.width, prevH = rb.style.height;
+  rb.style.width = 'auto';
+  rb.style.height = 'auto';
+  // Force layout
+  void rb.offsetWidth;
+  const needed = rb.getBoundingClientRect();
+
+  let w = Math.max(rect.width, needed.width);
+  let h = Math.max(rect.height, needed.height);
+
+  // Clamp to viewport
+  const vw = window.innerWidth, vh = window.innerHeight;
+  w = Math.min(w, vw * 0.95);
+  h = Math.min(h, vh * 0.25);
+
+  // Center the expanded banner over the original pill
+  const left = rect.left + (rect.width - w) / 2;
+  const top = rect.top + (rect.height - h) / 2;
+
+  rb.style.width = w + 'px';
+  rb.style.height = h + 'px';
+  rb.style.left = Math.max(0, left) + 'px';
+  rb.style.top = Math.max(0, top) + 'px';
+  rb.style.overflow = 'visible';
+}
+window.addEventListener('resize', () => {
+  const rb = document.getElementById('roundBanner');
+  if (rb && rb.style.display === 'block') positionRoundBannerOverDisplay();
+});
+
+
+
+function switchBossToDefeated(){
+  try{
+    console.log("[Victory] switching in-battle boss image to defeated");
+    const el = document.getElementById('bossImg');
+    const face = document.getElementById('bossFace');
+    if(el){
+      el.src = "boss_defeated.png";
+      el.style.display = "block";
+      el.classList.remove("shake");
+    }
+    if(face){
+      face.classList.add("useImg","defeated");
+      face.classList.remove("shake");
+    }
+  }catch(e){ console.warn("switchBossToDefeated error:", e); }
+}
+
+const problemEl = $("problem"), answerEl = $("answer"), submitBtn = $("submitBtn");
+const feedbackEl = $("feedback"), scoreEl = $("score"), roundEl = $("round"), streakEl = $("streak");
+const roundDisplay = $("roundDisplay"), roundBanner = $("roundBanner");
+const nextRoundHintEl = $("nextRoundHint");
+const finalCountdownDisplayEl = $("finalCountdownDisplay"); // 新しい要素をキャッシュ
+const restartBtn = $("restartBtn");
+const attackSection = $("attackSection"), attackBtn = $("attackBtn"), retryBtn = $("retryBtn"), victoryBtn = $("victoryBtn");
+const hpBar = $("hpBar"), hpNow = $("hpNow"), hpMax = $("hpMax"), atkLeft = $("atkLeft");
+const bossFace = $("bossFace"), bossImg = $("bossImg");
+const mobileBar = $("mobileBar");
+const mAttack = $("mAttack"), mRetry = $("mRetry"), mVictory = $("mVictory");
+
+// ===== ゲーム状態変数 =====
+let currentRound = 1;
+let currentInRoundIndex = 0;
+let currentScore = 0;
+let currentStreak = 0;
+let currentA = 0, currentB = 0, currentAns = 0;
+let currentPhase = GAME_PHASES.NORMAL; // 初期フェーズ
+
+// 最終決戦用
+let isFinalBattle = false;
+let finalCorrectAnswers = 0;
+let finalAttacksLeft = 0;
+let bossCurrentHP = 0;
+let bossMaxHP = 0;
+let finalQuestionCount = 0;
+let finalRemainingTime = GAME_CONST.FINAL_TIMER_SECONDS;
+let finalTimerId = null;
+
+// ===== Audio管理（軽量版） =====
+let audioContext;
+let masterGainNode;
+
+function initAudio() {
+  if (audioContext) return;
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  masterGainNode = audioContext.createGain();
+  masterGainNode.gain.value = GAME_CONST.AUDIO_MASTER_GAIN;
+  masterGainNode.connect(audioContext.destination);
+}
+
+function playBlip(freq = 880, dur = 0.08) {
+  if (!audioContext) return;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  osc.type = "square";
+  osc.frequency.value = freq;
+  osc.connect(gain);
+  gain.connect(masterGainNode);
+
+  gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.5, audioContext.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + dur);
+  osc.start();
+  osc.stop(audioContext.currentTime + dur + 0.02);
+}
+
+const AudioManager = {
+  playNextRoundSound: () => {
+    playBlip(880, 0.07);
+    setTimeout(() => playBlip(1175, 0.08), 80);
+    setTimeout(() => playBlip(1568, 0.09), 160);
+  },
+  playCorrectSound: () => {
+    playBlip(1000, 0.05);
+  },
+  playIncorrectSound: () => {
+    playBlip(200, 0.1);
+  },
+  playAttackSound: () => {
+    playBlip(440, 0.1);
+  },
+  playBossDefeatSound: () => {
+    playBlip(1800, 0.1); setTimeout(() => playBlip(2200, 0.1), 100); setTimeout(() => playBlip(2500, 0.2), 200);
+  }
+};
+
+// ===== 問題生成ロジック =====
+function generateProblem() {
+  let a_tens, a_units, b_tens, b_units;
+
+  // 1の位が繰り上がらないようにする
+  do {
+    a_units = Math.floor(Math.random() * 10); // 0-9
+    b_units = Math.floor(Math.random() * 10); // 0-9
+  } while (a_units + b_units >= 10);
+
+  // 10の位が繰り上がらないようにする (最大4+4=8で、99を超えないように)
+  do {
+    a_tens = Math.floor(Math.random() * 5); // 0-4
+    b_tens = Math.floor(Math.random() * 5); // 0-4
+  } while (a_tens + b_tens >= 10);
+
+  currentA = a_tens * 10 + a_units;
+  currentB = b_tens * 10 + b_units;
+
+  // 少なくとも一方が1以上になるように調整 (0+0を避けるため)
+  if (currentA === 0 && currentB === 0) {
+      currentA = 1;
+  }
+
+  currentAns = currentA + currentB;
+}
+
+function renderProblem() {
+  problemEl.textContent = `${currentA} + ${currentB} = ?`;
+  answerEl.value = "";
+  answerEl.focus();
+}
+
+function updateHUD() {
+  scoreEl.textContent = String(currentScore);
+  streakEl.textContent = String(currentStreak);
+  roundEl.textContent = String(currentRound);
+
+  if (!isFinalBattle) {
+    // 通常ラウンド：常にラウンド番号を表示（Round5も含む）
+    roundDisplay.textContent = `ラウンド ${currentRound}`;
+    roundDisplay.classList.remove("final", "congrats-rainbow");
+
+    // 次ラウンドのヒント
+    if (currentRound < GAME_CONST.FINAL_ROUND_THRESHOLD) {
+      nextRoundHintEl.textContent = `➡ 次はラウンド ${currentRound + 1}`;
+    } else if (currentRound === GAME_CONST.FINAL_ROUND_THRESHOLD) {
+      nextRoundHintEl.textContent = `➡ 次は🔥 最終決戦 🔥`;
+    } else {
+      nextRoundHintEl.textContent = "";
+    }
+
+    // カウントダウンは通常ラウンドでは非表示
+    finalCountdownDisplayEl.style.display = 'none';
+  } else {
+    // 最終決戦中：ラベルは「🔥 最終決戦 🔥」、カウントダウンを表示
+    nextRoundHintEl.textContent = "";
+    roundDisplay.textContent = "🔥 最終決戦 🔥";
+    roundDisplay.classList.add("final");
+    finalCountdownDisplayEl.style.display = 'block';
+  }
+
+  updateMobileBar();
+}
+
+// ===== 入力処理ユーティリティ =====
+function normalizeDigits(s) {
+  return s.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+}
+
+function handleEnterKey(e) {
+  if (e.isComposing || e.key !== "Enter") return;
+  e.preventDefault();
+  handleSubmission();
+}
+
+function handleSubmission() {
+  switch (currentPhase) {
+    case GAME_PHASES.NORMAL:
+      submitNormalRound();
+      break;
+    case GAME_PHASES.FINAL_QUESTION:
+      submitFinalQuestion();
+      break;
+    case GAME_PHASES.ATTACK:
+      // 攻撃フェーズではEnterキーによる操作を無効化
+      break;
+  }
+}
+
+// イベントリスナーの登録
+answerEl.addEventListener("keydown", handleEnterKey);
+submitBtn.addEventListener("click", handleSubmission);
+
+// ===== 通常ラウンドの処理 =====
+function submitNormalRound() {
+  const rawInput = (answerEl.value || "").trim();
+
+  // ショートカットコマンド
+  if (SHORTCUTS.BOSS_ATTACK.test(rawInput)) {
+    answerEl.value = "";
+    startFinalBattleIntro();
+    return;
+  }
+  if (SHORTCUTS.ROUND_FIVE_Q_THREE.test(rawInput)) {
+    currentRound = GAME_CONST.FINAL_ROUND_THRESHOLD;
+    currentInRoundIndex = GAME_CONST.ROUND_COUNT_PER_STAGE - 1; // 3問目
+    isFinalBattle = false;
+    setPhase(GAME_PHASES.NORMAL);
+    updateHUD();
+    generateProblem();
+    renderProblem();
+    return;
+  }
+  if (SHORTCUTS.ROUND_FIVE_Q_ONE.test(rawInput)) {
+    currentRound = GAME_CONST.FINAL_ROUND_THRESHOLD;
+    currentInRoundIndex = 0;
+    isFinalBattle = false;
+    setPhase(GAME_PHASES.NORMAL);
+    updateHUD();
+    generateProblem();
+    renderProblem();
+    return;
+  }
+
+  const normalizedInput = normalizeDigits(rawInput);
+  if (!/^-?\d+$/.test(normalizedInput)) {
+    feedbackEl.innerHTML = `<span class="bad">数字で入力してね</span>`;
+    AudioManager.playIncorrectSound();
+    return;
+  }
+  const userAnswer = parseInt(normalizedInput, 10);
+
+  if (userAnswer === currentAns) {
+    currentScore++;
+    currentStreak++;
+    feedbackEl.innerHTML = `<span class="good">✅ 正解！</span>`;
+    AudioManager.playCorrectSound();
+    currentInRoundIndex++;
+    if (currentInRoundIndex >= GAME_CONST.ROUND_COUNT_PER_STAGE) {
+      feedbackEl.innerHTML = `🎉 ラウンド ${currentRound} クリア！`;
+      autoAdvanceRound();
+    } else {
+      generateProblem();
+      renderProblem();
+    }
+  } else {
+    currentStreak = 0;
+    feedbackEl.innerHTML = `<span class="bad">❌ ちがうよ (正解は ${currentAns})</span>`; // 正解を表示するヒント
+    AudioManager.playIncorrectSound();
+  }
+  updateHUD();
+  answerEl.value = "";
+}
+
+// ===== ラウンド進行 =====
+function autoAdvanceRound() {
+  const nextRound = currentRound + 1;
+  if (nextRound > GAME_CONST.FINAL_ROUND_THRESHOLD ||     currentRound === GAME_CONST.FINAL_ROUND_THRESHOLD) {
+    roundBanner.textContent = `ラウンド${currentRound}→最終決戦`;
+} else {
+    roundBanner.textContent = `ラウンド ${currentRound} → ${nextRound}`;
+}
+  roundBanner.style.display = "block";
+  positionRoundBannerOverDisplay();
+  roundBanner.classList.add("docked");
+  roundBanner.classList.remove("show");
+  // リフローを強制してアニメーションをリセット
+  void roundBanner.offsetWidth;
+  roundBanner.classList.add("show");
+  setTimeout(() => { roundBanner.style.display = "none"; }, GAME_CONST.ROUND_BANNER_DURATION_MS);
+  AudioManager.playNextRoundSound();
+
+  setTimeout(() => {
+    currentRound = nextRound;
+    currentInRoundIndex = 0;
+    if (currentRound > GAME_CONST.FINAL_ROUND_THRESHOLD) {
+      hideRoundBannerNow();
+      startFinalBattleIntro();
+    } else {
+      updateHUD();
+      generateProblem();
+      renderProblem();
+      hideRoundBannerNow();
+    }
+  }, 650); // バナーアニメーションの途中で次のラウンドに進む
+}
+
+// ===== 最終決戦：イントロ（boss_intro.png）→ 〇問/〇秒 =====
+function startFinalBattleIntro() {
+  setPhase(GAME_PHASES.INTRO_FINAL);
+  isFinalBattle = true; // 最終決戦モードに入る
+  updateHUD(); // UI更新でfinalクラス追加
+
+  if (nextRoundHintEl) nextRoundHintEl.textContent = '';
+  initAudio(); // 最終決戦開始時に確実にオーディオコンテキストを初期化
+
+  // HUD更新でも設定されるが念のため
+  feedbackEl.textContent = "";
+  answerEl.value = "";
+  answerEl.focus();
+
+  // イントロオーバーレイの作成
+  const overlay = document.createElement("div");
+  overlay.id = "finalIntroOverlay";
+  const img = document.createElement("img");
+  // ここを修正：プレースホルダーURLから相対パスに変更
+  img.src = "boss_intro.png";
+  img.alt = "最終決戦";
+  const label = document.createElement("div");
+  label.className = "label";
+  label.textContent = "最終決戦";
+  const countDisplay = document.createElement("div");
+  countDisplay.className = "count";
+  countDisplay.textContent = "3...";
+  overlay.appendChild(img);
+  overlay.appendChild(label);
+  overlay.appendChild(countDisplay);
+  document.body.appendChild(overlay);
+const closeIntroAndStartFinal = () => {
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
+    startFinalBattleQuestions();
+  };
+
+  overlay.addEventListener("click", closeIntroAndStartFinal, { once: true });
+  overlay.addEventListener("touchend", closeIntroAndStartFinal, { once: true });
+
+  let countdown = 3;
+  const introTimer = setInterval(() => {
+    countdown--;
+    if (countdown > 0) {
+      if (document.getElementById("finalIntroOverlay")) {
+        countDisplay.textContent = `${countdown}...`;
+      }
+    } else {
+      clearInterval(introTimer);
+      if (document.getElementById("finalIntroOverlay")) {
+        closeIntroAndStartFinal();
+      }
+    }
+  }, 1000);
+}
+
+function startFinalBattleQuestions() {
+  setPhase(GAME_PHASES.FINAL_QUESTION);
+  finalQuestionCount = 0;
+  finalRemainingTime = GAME_CONST.FINAL_TIMER_SECONDS;
+  finalCorrectAnswers = 0;
+
+  // カウントダウン表示を有効化
+  finalCountdownDisplayEl.style.display = 'block';
+  finalCountdownDisplayEl.textContent = `残り ${finalRemainingTime} 秒`;
+
+  // タイマー開始
+  finalTimerId = setInterval(() => {
+    finalRemainingTime--;
+    if (finalRemainingTime < 0) finalRemainingTime = 0; // 念のため
+    finalCountdownDisplayEl.textContent = `残り ${finalRemainingTime} 秒`; // カウントダウンのみ表示
+    if (finalRemainingTime === 0) {
+      clearInterval(finalTimerId);
+      endFinalBattleQuestions();
+    }
+  }, 1000);
+
+  // 最初の問題生成
+  generateFinalQuestion();
+  feedbackEl.textContent = "";
+  answerEl.focus();
+}
+
+function generateFinalQuestion() {
+  // 最終決戦の問題は、より計算が複雑な方が良いかもしれないため、通常より高い範囲で生成
+  // ただし、ここでも「繰り上がりなし」の制約を維持する
+  let a_tens, a_units, b_tens, b_units;
+
+  do {
+    a_units = Math.floor(Math.random() * 10);
+    b_units = Math.floor(Math.random() * 10);
+  } while (a_units + b_units >= 10);
+
+  do {
+    a_tens = Math.floor(Math.random() * 5); // 0-4 (50未満の範囲を想定)
+    b_tens = Math.floor(Math.random() * 5); // 0-4
+  } while (a_tens + b_tens >= 10); // 10の位が繰り上がらないように
+
+  currentA = a_tens * 10 + a_units;
+  currentB = b_tens * 10 + b_units;
+
+  if (currentA === 0 && currentB === 0) {
+      currentA = 1;
+  }
+
+  currentAns = currentA + currentB;
+  problemEl.textContent = `${currentA} + ${currentB} = ?`; // カウントダウンは別要素
+}
+
+function submitFinalQuestion() {
+  const userAnswer = parseInt(normalizeDigits((answerEl.value || "").trim()), 10);
+
+  if (!isNaN(userAnswer) && userAnswer === currentAns) {
+    finalCorrectAnswers++;
+    feedbackEl.innerHTML = `<span class="good">+1 正解！</span>`;
+    AudioManager.playCorrectSound();
+  } else {
+    feedbackEl.innerHTML = `<span class="bad">❌</span>`;
+    AudioManager.playIncorrectSound();
+  }
+  finalQuestionCount++;
+  answerEl.value = "";
+  answerEl.focus();
+
+  if (finalQuestionCount >= GAME_CONST.FINAL_QUESTION_COUNT) {
+    if (finalTimerId) clearInterval(finalTimerId);
+    endFinalBattleQuestions();
+  } else {
+    generateFinalQuestion();
+  }
+}
+
+function endFinalBattleQuestions() {
+  setPhase(GAME_PHASES.ATTACK);
+  finalAttacksLeft = finalCorrectAnswers;
+  bossMaxHP = bossCurrentHP = calculateWeightedBossHP();
+  finalCountdownDisplayEl.style.display = 'none'; // 攻撃フェーズになったらカウントダウンを非表示
+  goAttackPhase();
+}
+
+function calculateWeightedBossHP() {
+  // ボスHPのランダム性を確保
+  const randomIndex = Math.floor(Math.random() * GAME_CONST.BOSS_HP_BAG.length);
+  return GAME_CONST.BOSS_HP_BAG[randomIndex];
+}
+
+// ===== 攻撃フェーズ =====
+function goAttackPhase() {
+  // ボス画像：戦闘中は固定
+  if (bossImg) {
+    // ここを修正：プレースホルダーURLから相対パスに変更
+    bossImg.src = "boss_battle.png";
+    bossImg.style.display = "block";
+    bossFace.classList.add("useImg");
+  }
+
+  attackSection.style.display = "block";
+  answerEl.placeholder = "答え"; // 攻撃フェーズでもplaceholderを「答え」に戻す
+  answerEl.readOnly = true; // 攻撃フェーズでは入力を無効化
+  answerEl.focus(); // 攻撃フェーズでも入力欄にフォーカス
+  $("attackResult").textContent = "";
+  bossFace.classList.remove("defeated", "shake");
+  bossImg.classList.remove("shake");
+  updateAttackUI();
+
+  if (finalAttacksLeft > 0) {
+    attackBtn.style.display = "inline-flex";
+    retryBtn.style.display = "none";
+  } else {
+    attackBtn.style.display = "none";
+    retryBtn.style.display = "inline-flex";
+    retryBtn.classList.remove("secondary");
+    retryBtn.classList.add("primary");
+  }
+  victoryBtn.style.display = "none";
+  
+
+  attackSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  updateMobileBar();
+}
+
+function updateAttackUI() {
+  hpNow.textContent = bossCurrentHP;
+  hpMax.textContent = bossMaxHP;
+  atkLeft.textContent = finalAttacksLeft;
+  const hpWidth = Math.max(0, Math.min(1, bossCurrentHP / Math.max(1, bossMaxHP)));
+  hpBar.style.width = (hpWidth * 100) + "%";
+}
+
+attackBtn.addEventListener("click", attackBoss);
+retryBtn.addEventListener("click", retryFinalBattle);
+victoryBtn.addEventListener("click", revealVictory);
+
+function attackBoss() {
+  try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) { }
+  AudioManager.playAttackSound();
+
+  if (finalAttacksLeft <= 0 || bossCurrentHP <= 0) return;
+
+  // アニメーションのリセットと開始
+  bossFace.classList.remove("shake");
+  bossImg.classList.remove("shake");
+  void bossFace.offsetWidth; // リフローを強制
+  bossFace.classList.add("shake");
+  bossImg.classList.add("shake");
+
+  finalAttacksLeft--;
+  bossCurrentHP = Math.max(0, bossCurrentHP - 1);
+  updateAttackUI();
+  updateMobileBar();
+
+  if (bossCurrentHP <= 0) {
+
+    attackBtn.style.display = "none";
+    retryBtn.style.display = "none";
+    victoryBtn.style.display = "inline-flex";
+    AudioManager.playBossDefeatSound();
+    $("attackResult").textContent = "押して！";
+    // setPhase(GAME_PHASES.VICTORY);  // disabled to keep the '押して！' button visible
+    updateMobileBar();
+  } else if (finalAttacksLeft <= 0) {
+    attackBtn.style.display = "none";
+    retryBtn.style.display = "inline-flex";
+    retryBtn.classList.remove("secondary");
+    retryBtn.classList.add("primary");
+    $("attackResult").innerHTML = `<span class="bad">⌛ 攻撃終了… まだHPが残っている！</span>`;
+  }
+}
+
+function retryFinalBattle() {
+  attackSection.style.display = "none";
+  setPhase(GAME_PHASES.NORMAL); // 一旦ノーマルに戻してから最終決戦イントロへ
+  startFinalBattleIntro();
+  updateMobileBar();
+}
+
+function revealVictory() {
+  console.log("revealVictory function called."); // Debugging line
+  // setPhase(GAME_PHASES.VICTORY);  // disabled to keep the '押して！' button visible
+    updateMobileBar();
+  victoryBtn.style.display = "none";
+  switchBossToDefeated();
+  const rd = document.getElementById("roundDisplay"); if (rd) { rd.textContent = "おめでとう"; rd.classList.remove("final"); rd.classList.add("congrats-rainbow"); }
+
+
+  const overlay = document.createElement('div');
+  overlay.id = 'victoryOverlay';
+  // CSSスタイルを直接適用して、確実にフルスクリーンで表示されるようにします
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.1);
+    z-index: 9999;
+  `;
+  // オーバーレイが即座に表示されることを確認
+  overlay.style.display = 'flex';
+
+  const img = document.createElement('img');
+  img.alt = 'ボス撃破';
+  img.src = 'boss_defeated.png';
+  
+  img.style.cssText = `
+    display:block;
+    width:100%;
+    height:100%;
+    max-width:100vw;
+    max-height:100vh;
+    object-fit: contain;
+    margin:0; padding:0; border:0; box-shadow:none;
+  `;
+console.log("Setting img.src to:", img.src); // Debugging line
+
+  // 画像の読み込み失敗時にコンソールログとフォールバックテキストを表示
+  img.onerror = function() {
+    console.error("Failed to load boss_defeated.png. Check file name, path, and integrity.");
+    const fallbackText = document.createElement('div');
+    fallbackText.textContent = "🔥 撃破！ (画像読み込み失敗)";
+    fallbackText.style.cssText = `
+      color: var(--gold-start);
+      font-size: 48px;
+      font-weight: 900;
+      text-shadow: 0 0 12px #fff,0 0 28px var(--gold-end);
+      margin-top: 20px;
+    `;
+    overlay.appendChild(fallbackText);
+    img.style.display = 'none'; // 壊れた画像アイコンを非表示
+  };
+
+  // 画像のスタイルを直接適用して、親要素（オーバーレイ）いっぱいに表示
+  img.style.cssText = `
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* 画面全体を覆うように拡大・縮小し、必要に応じて切り取る */
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+      max-width: 100vw;
+    max-height: 100vh;
+`;
+
+  overlay.appendChild(img);
+  
+  // Add centered "撃破" text on top of the image
+  const vtxt = document.createElement('div');
+  vtxt.className = 'victoryText flash';
+  vtxt.textContent = '🎉撃破🎉';
+  overlay.appendChild(vtxt);
+document.body.appendChild(overlay);
+  console.log("Overlay and image appended to body."); // Debugging line
+  // 念のためもう一度差し替えを実行（描画後の安全策）
+  setTimeout(switchBossToDefeated, 0);
+
+  overlay.addEventListener('click', () => {
+    switchBossToDefeated();
+    console.log("Victory overlay clicked, removing.");
+    overlay.remove();
+  }, { once: true });
+  overlay.addEventListener('touchend', () => {
+    switchBossToDefeated();
+    console.log("Victory overlay touched, removing.");
+    overlay.remove();
+  }, { once: true });
+}
+
+// ===== リスタート =====
+restartBtn.addEventListener("click", resetGame);
+
+function resetGame() {
+  // タイマーがあればクリア
+  if (finalTimerId) clearInterval(finalTimerId);
+
+  // 全てのゲーム状態を初期化
+  currentRound = 1;
+  currentInRoundIndex = 0;
+  currentScore = 0;
+  currentStreak = 0;
+  isFinalBattle = false;
+  finalCorrectAnswers = 0;
+  finalAttacksLeft = 0;
+  bossCurrentHP = 0;
+  bossMaxHP = 0;
+  finalQuestionCount = 0;
+  finalRemainingTime = GAME_CONST.FINAL_TIMER_SECONDS;
+
+  // UIの状態をリセット
+  setPhase(GAME_PHASES.NORMAL); // フェーズをノーマルに設定
+  attackSection.style.display = "none";
+  victoryBtn.style.display = "none";
+  
+
+  retryBtn.style.display = "none";
+  attackBtn.style.display = "inline-flex"; // 攻撃ボタンはデフォルト表示
+  $("attackResult").textContent = "";
+
+  roundDisplay.classList.remove("final", "congrats-rainbow");
+  roundDisplay.textContent = "ラウンド 1";
+  feedbackEl.textContent = "";
+
+  // カウントダウン表示を非表示
+  finalCountdownDisplayEl.style.display = 'none';
+
+  // 問題を再生成して表示
+  updateHUD();
+  generateProblem();
+  renderProblem();
+  answerEl.placeholder = "答え";
+  answerEl.focus();
+
+  // 既に表示されているオーバーレイを削除 (リスタートボタンが押された場合)
+  const introOverlay = $("finalIntroOverlay");
+  if (introOverlay) introOverlay.remove();
+  const victoryOverlay = $("victoryOverlay");
+  if (victoryOverlay) victoryOverlay.remove();
+
+  updateMobileBar(); // モバイルバーの状態も更新
+}
+
+// ===== Mobile action bar (mirrors current action; for thumb reachability) =====
+function updateMobileBar() {
+  const isSmallScreen = window.matchMedia('(max-width: 640px)').matches;
+  if (!isSmallScreen) {
+    mobileBar.style.display = 'none';
+    return;
+  }
+
+  if (currentPhase === GAME_PHASES.ATTACK) {
+    mobileBar.style.display = 'block';
+    // メインボタンの状態をモバイルバーにミラーリング
+    mAttack.style.display = attackBtn.style.display;
+    mRetry.style.display = retryBtn.style.display;
+    mVictory.style.display = victoryBtn.style.display;
+  } else {
+    mobileBar.style.display = 'none';
+  }
+}
+
+// Bind mobile bar buttons to same logic
+mAttack.addEventListener('click', attackBoss);
+mRetry.addEventListener('click', retryFinalBattle);
+mVictory.addEventListener('click', revealVictory);
+
+window.addEventListener('resize', updateMobileBar);
+
+// ===== フェーズ制御とUI更新 =====
+function setPhase(newPhase) {
+  currentPhase = newPhase;
+  // フェーズに応じてUI要素の表示/非表示を制御
+  switch (currentPhase) {
+    case GAME_PHASES.NORMAL:
+    case GAME_PHASES.FINAL_QUESTION:
+      submitBtn.style.display = 'inline-flex';
+      attackSection.style.display = 'none';
+      answerEl.readOnly = false;
+      answerEl.focus();
+      break;
+    case GAME_PHASES.ATTACK:
+      submitBtn.style.display = 'none'; // 攻撃フェーズでは「答える」ボタンは非表示
+      attackSection.style.display = 'block';
+      answerEl.readOnly = true; // 攻撃フェーズでは入力を無効化
+      answerEl.focus();
+      break;
+    case GAME_PHASES.INTRO_FINAL:
+    case GAME_PHASES.VICTORY:
+      submitBtn.style.display = 'none';
+      attackSection.style.display = 'none';
+      answerEl.readOnly = true; // オーバーレイ中は入力を受け付けない
+      break;
+  }
+  updateMobileBar();
+}
+// ===== 初期化 =====
+function initializeGame() {
+  // 画像のプリロード
+  // ここを修正：プレースホルダーURLから相対パスに変更
+  preloadImages([
+    'boss_intro.png',    // boss_intro.png の代わり
+    'boss_battle.png',   // boss_battle.png の代わり
+    'boss_defeated.png'  // boss_defeated.png の代わり (フルスクリーン用)
+  ]);
+
+  // オーディオコンテキストの初期化（ユーザー操作をトリガーに）
+  window.addEventListener("pointerdown", initAudio, { once: true });
+
+  resetGame(); // ゲームの状態とUIを初期化
+  setPhase(GAME_PHASES.NORMAL); // 初期フェーズを設定
+}
+
+function preloadImages(urls) {
+  urls.forEach(url => {
+    const img = new Image();
+    img.src = url;
+  });
+}
+
+// ページロード完了後にゲームを初期化
+window.addEventListener("load", initializeGame);
+</script>
+</body>
+</html>
